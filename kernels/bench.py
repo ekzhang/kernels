@@ -66,22 +66,33 @@ def run_bench_scalar_mul():
     print(f"CuTe DSL: {elapsed_time_ms:.2f} ms, {mem_bw_GB_s:.2f} GB/s")
 
 
-@app.function(gpu="B200")
-def run_bench(name: str):
-    print("=" * 40)
-    match name:
-        case "rms_norm":
-            run_bench_rms_norm()
-        case "scalar_mul":
-            run_bench_scalar_mul()
-        case _:
-            raise ValueError(f"Unknown benchmark: {name}")
+@app.cls()
+class BenchmarkRunner:
+    @modal.method()
+    def run_bench(self, name: str):
+        print("-" * 24 + f"[ {name} ]" + "-" * 24)
+
+        match name:
+            case "rms_norm":
+                run_bench_rms_norm()
+            case "scalar_mul":
+                run_bench_scalar_mul()
+            case _:
+                raise ValueError(f"Unknown benchmark: {name}")
 
 
 @app.local_entrypoint()
-def main(name: str = "all"):
-    if name == "all":
-        for name in ["rms_norm", "scalar_mul"]:
-            run_bench.remote(name)
+def main(name: str = "all", gpu: str = "B200"):
+    if gpu == "all":
+        gpus = ("B200", "H200", "A100")
     else:
-        run_bench.remote(name)
+        gpus = (gpu,)
+
+    for gpu in gpus:
+        print(f"=> Running benchmark on {gpu}")
+        Runner = BenchmarkRunner.with_options(gpu=gpu)
+        if name == "all":
+            for benchmark in ("rms_norm", "scalar_mul"):
+                Runner().run_bench.remote(benchmark)
+        else:
+            Runner().run_bench.remote(name)
