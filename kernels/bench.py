@@ -13,7 +13,6 @@ def run_bench_rms_norm():
     import torch.nn.functional as F
     from kernels.rms_norm import rms_norm
     from triton.testing import do_bench
-    import quack
 
     M, N = 8192, 131072
     # M, N = 65536, 16384
@@ -34,12 +33,15 @@ def run_bench_rms_norm():
     mem_bw_GB_s = 2 * x.numel() * x.element_size() / (elapsed_time_ms * 1e-3) / 1e9
     print(f"CuTe DSL: {elapsed_time_ms:.2f} ms, {mem_bw_GB_s:.2f} GB/s")
 
-    y_quack = quack.rmsnorm(x, w, eps=1e-5)
-    torch.testing.assert_close(y_quack, y_ref)
+    if torch.cuda.get_device_capability() >= (9, 0):
+        import quack  # Needs at least Hopper to run the quack.rmsnorm().
 
-    elapsed_time_ms = do_bench(lambda: quack.rmsnorm(x, w, eps=1e-5))
-    mem_bw_GB_s = 2 * x.numel() * x.element_size() / (elapsed_time_ms * 1e-3) / 1e9
-    print(f"Quack: {elapsed_time_ms:.2f} ms, {mem_bw_GB_s:.2f} GB/s")
+        y_quack = quack.rmsnorm(x, w, eps=1e-5)
+        torch.testing.assert_close(y_quack, y_ref)
+
+        elapsed_time_ms = do_bench(lambda: quack.rmsnorm(x, w, eps=1e-5))
+        mem_bw_GB_s = 2 * x.numel() * x.element_size() / (elapsed_time_ms * 1e-3) / 1e9
+        print(f"Quack: {elapsed_time_ms:.2f} ms, {mem_bw_GB_s:.2f} GB/s")
 
 
 def run_bench_scalar_mul():

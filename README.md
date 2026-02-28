@@ -1,6 +1,6 @@
 # kernels
 
-Coding environment for some Blackwell kernels and benchmark runner in Modal.
+Coding environment for some GPU kernels and benchmark runner in Modal.
 
 ## Usage
 
