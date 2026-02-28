@@ -44,5 +44,9 @@ def run_bench_rms_norm():
 
 
 @app.local_entrypoint()
-def main():
-    run_bench_rms_norm.remote()
+def main(name: str):
+    match name:
+        case "rms_norm":
+            run_bench_rms_norm.remote()
+        case _:
+            raise ValueError(f"Unknown benchmark: {name}")
