@@ -81,6 +81,7 @@ def run_bench_scalar_mul():
 def run_bench_matmul_dense_bf16():
     import torch
     from kernels.matmul_dense_bf16 import matmul_dense_bf16
+    from kernels.matmul_dense_bf16_tile import matmul_dense_bf16_tile
     from triton.testing import do_bench
 
     if torch.cuda.get_device_capability() >= (10, 0):  # Blackwell tcgen05
@@ -94,6 +95,10 @@ def run_bench_matmul_dense_bf16():
         torch.testing.assert_close(c, c_ref)
         print("Matmul (dense BF16) test passed!")
 
+        c = matmul_dense_bf16_tile(a, b)
+        torch.testing.assert_close(c, c_ref)
+        print("Matmul (dense BF16, cuTile) test passed!")
+
         elapsed_time_ms = do_bench(lambda: a @ b)
         tflops = 2 * M * K * N / (elapsed_time_ms * 1e-3) / 1e12
         print(f"PyTorch: {elapsed_time_ms:.2f} ms, {tflops:.2f} TFLOPS")
@@ -101,6 +106,10 @@ def run_bench_matmul_dense_bf16():
         elapsed_time_ms = do_bench(lambda: matmul_dense_bf16(a, b))
         tflops = 2 * M * K * N / (elapsed_time_ms * 1e-3) / 1e12
         print(f"CuTe DSL: {elapsed_time_ms:.2f} ms, {tflops:.2f} TFLOPS")
+
+        elapsed_time_ms = do_bench(lambda: matmul_dense_bf16_tile(a, b))
+        tflops = 2 * M * K * N / (elapsed_time_ms * 1e-3) / 1e12
+        print(f"cuTile: {elapsed_time_ms:.2f} ms, {tflops:.2f} TFLOPS")
 
 
 @app.cls()
