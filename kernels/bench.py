@@ -73,23 +73,24 @@ def run_bench_matmul_dense_bf16():
     from kernels.matmul_dense_bf16 import matmul_dense_bf16
     from triton.testing import do_bench
 
-    M, K, N = 8192, 8192, 8192
+    if torch.cuda.get_device_capability() >= (10, 0):  # Blackwell tcgen05
+        M, K, N = 8192, 8192, 8192
 
-    a = torch.randn(M, K, device="cuda", dtype=torch.bfloat16)
-    b = torch.randn(N, K, device="cuda", dtype=torch.bfloat16).T
+        a = torch.randn(M, K, device="cuda", dtype=torch.bfloat16)
+        b = torch.randn(N, K, device="cuda", dtype=torch.bfloat16).T
 
-    c = matmul_dense_bf16(a, b)
-    c_ref = a @ b
-    torch.testing.assert_close(c, c_ref)
-    print("Matmul (dense BF16) test passed!")
+        c = matmul_dense_bf16(a, b)
+        c_ref = a @ b
+        torch.testing.assert_close(c, c_ref)
+        print("Matmul (dense BF16) test passed!")
 
-    elapsed_time_ms = do_bench(lambda: a @ b)
-    tflops = 2 * M * K * N / (elapsed_time_ms * 1e-3) / 1e12
-    print(f"PyTorch: {elapsed_time_ms:.2f} ms, {tflops:.2f} TFLOPS")
+        elapsed_time_ms = do_bench(lambda: a @ b)
+        tflops = 2 * M * K * N / (elapsed_time_ms * 1e-3) / 1e12
+        print(f"PyTorch: {elapsed_time_ms:.2f} ms, {tflops:.2f} TFLOPS")
 
-    elapsed_time_ms = do_bench(lambda: matmul_dense_bf16(a, b))
-    tflops = 2 * M * K * N / (elapsed_time_ms * 1e-3) / 1e12
-    print(f"CuTe DSL: {elapsed_time_ms:.2f} ms, {tflops:.2f} TFLOPS")
+        elapsed_time_ms = do_bench(lambda: matmul_dense_bf16(a, b))
+        tflops = 2 * M * K * N / (elapsed_time_ms * 1e-3) / 1e12
+        print(f"CuTe DSL: {elapsed_time_ms:.2f} ms, {tflops:.2f} TFLOPS")
 
 
 @app.cls()
