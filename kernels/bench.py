@@ -2,7 +2,7 @@ import modal
 
 app = modal.App("kernels")
 app.image = (
-    modal.Image.debian_slim()
+    modal.Image.from_registry("nvidia/cuda:13.1.0-devel-ubuntu24.04", add_python="3.13")
     .pip_install_from_pyproject("./pyproject.toml")
     .add_local_python_source("kernels")
 )
@@ -47,6 +47,7 @@ def run_bench_rms_norm():
 def run_bench_scalar_mul():
     import torch
     from kernels.scalar_mul import scalar_mul
+    from kernels.scalar_mul_tile import scalar_mul_tile
     from triton.testing import do_bench
 
     M, N = 8192, 131072
@@ -59,6 +60,10 @@ def run_bench_scalar_mul():
     torch.testing.assert_close(c, c_ref)
     print("Scalar multiplication test passed!")
 
+    c = scalar_mul_tile(a, b)
+    torch.testing.assert_close(c, c_ref)
+    print("Scalar multiplication (cuTile) test passed!")
+
     elapsed_time_ms = do_bench(lambda: a * b)
     mem_bw_GB_s = 2 * a.numel() * a.element_size() / (elapsed_time_ms * 1e-3) / 1e9
     print(f"PyTorch: {elapsed_time_ms:.2f} ms, {mem_bw_GB_s:.2f} GB/s")
@@ -66,6 +71,11 @@ def run_bench_scalar_mul():
     elapsed_time_ms = do_bench(lambda: scalar_mul(a, b))
     mem_bw_GB_s = 2 * a.numel() * a.element_size() / (elapsed_time_ms * 1e-3) / 1e9
     print(f"CuTe DSL: {elapsed_time_ms:.2f} ms, {mem_bw_GB_s:.2f} GB/s")
+
+    if torch.cuda.get_device_capability() >= (10, 0):  # Blackwell
+        elapsed_time_ms = do_bench(lambda: scalar_mul_tile(a, b))
+        mem_bw_GB_s = 2 * a.numel() * a.element_size() / (elapsed_time_ms * 1e-3) / 1e9
+        print(f"cuTile: {elapsed_time_ms:.2f} ms, {mem_bw_GB_s:.2f} GB/s")
 
 
 def run_bench_matmul_dense_bf16():
