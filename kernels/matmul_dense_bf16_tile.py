@@ -11,6 +11,19 @@ import torch
 import cuda.tile as ct
 
 
+def swizzle_2d(M, N, tm, tn, GROUP_SIZE_M, bid):
+    # Get the global IDs of a given CUDA block in a 1D grid.
+    num_bid_m = ct.cdiv(M, tm)
+    num_bid_n = ct.cdiv(N, tn)
+    num_bid_in_group = GROUP_SIZE_M * num_bid_n
+    group_id = bid // num_bid_in_group
+    first_bid_m = group_id * GROUP_SIZE_M
+    group_size_m = min(num_bid_m - first_bid_m, GROUP_SIZE_M)
+    bid_m = first_bid_m + (bid % group_size_m)
+    bid_n = (bid % num_bid_in_group) // group_size_m
+    return bid_m, bid_n
+
+
 @ct.kernel
 def matmul_dense_bf16_tile_kernel(
     A,
@@ -20,11 +33,8 @@ def matmul_dense_bf16_tile_kernel(
     tn: ct.Constant[int],
     tk: ct.Constant[int],
 ):
-    pid_m = ct.bid(0)
-    pid_n = ct.bid(1)
-
-    # TODO: swizzle
-    bidx, bidy = pid_m, pid_n
+    bid = ct.bid(0)
+    bidx, bidy = swizzle_2d(C.shape[0], C.shape[1], tm, tn, 8, bid)
 
     num_tiles_k = ct.num_tiles(A, axis=1, shape=(tm, tk))
     accumulator = ct.full((tm, tn), 0, dtype=ct.float32)
@@ -34,7 +44,7 @@ def matmul_dense_bf16_tile_kernel(
         b = ct.load(B, index=(k, bidy), shape=(tk, tn))
         accumulator = ct.mma(a, b, accumulator)
 
-    ct.store(C, index=(pid_m, pid_n), tile=accumulator.astype(ct.bfloat16))
+    ct.store(C, index=(bidx, bidy), tile=accumulator.astype(ct.bfloat16))
 
 
 def matmul_dense_bf16_tile(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -46,7 +56,7 @@ def matmul_dense_bf16_tile(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
     c = torch.empty((M, N), dtype=torch.bfloat16, device=a.device)
 
-    grid = (ct.cdiv(M, 128), ct.cdiv(N, 256), 1)
+    grid = (ct.cdiv(M, 128) * ct.cdiv(N, 256), 1, 1)
     ct.launch(
         torch.cuda.current_stream(),
         grid,
